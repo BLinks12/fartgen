@@ -294,6 +294,7 @@ Inspired by the Fartcoin Launch Strategy.`
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
+            updateFunction = () => {}; // Reset update function
             document.getElementById('share-button').style.display = 'none';
             fartContainer.style.display = 'none';
             if (renderer) {
@@ -384,6 +385,26 @@ Inspired by the Fartcoin Launch Strategy.`
         let scene, camera, renderer, particles;
         let animationFrameId;
         let lastHandle; // To store the last used handle for sharing
+        let particleTexture;
+        let updateFunction = () => {};
+
+        function createParticleTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+
+            const context = canvas.getContext('2d');
+            const gradient = context.createRadialGradient(canvas.width / 2, canvas.height / 2, 0, canvas.width / 2, canvas.height / 2, canvas.width / 2);
+            gradient.addColorStop(0, 'rgba(255,255,255,0.9)');
+            gradient.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+            gradient.addColorStop(0.5, 'rgba(255,255,255,0.3)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            return new THREE.CanvasTexture(canvas);
+        }
 
         function generateFart(handle) {
             appendOutput(`Generating fart for ${handle}...`);
@@ -400,7 +421,9 @@ Inspired by the Fartcoin Launch Strategy.`
             // Play procedural sound
             playFartSound(random);
 
-            // 2. Fart Stats Generation
+            // 2. Fart Stats & Type Generation
+            const fartTypes = ['The Classic Cloud', 'The Gaseous Ripple', 'The Dense Nugget'];
+            const fartType = fartTypes[Math.floor(random() * fartTypes.length)];
             const potency = (random() * 7 + 3).toFixed(1);
             const duration = (random() * 5 + 0.5).toFixed(1);
             const scentProfiles = ['burnt toast and regret', 'old cheese and disappointment', 'damp socks', 'questionable life choices', 'a failed startup', 'pure sulfur'];
@@ -411,6 +434,7 @@ Inspired by the Fartcoin Launch Strategy.`
             appendOutput(
 `
 <div class="output-line">Fart Analysis Report for ${handle}:
+  Fart Type.......: ${fartType}
   Potency.........: ${potency} / 10.0
   Duration........: ${duration}s
   Scent Profile...: ${scent}
@@ -426,13 +450,11 @@ Inspired by the Fartcoin Launch Strategy.`
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
             renderer.setClearColor(0x000000, 0);
 
-            // 4. Create Particles
-            const particleCount = 500 + Math.floor(random() * 1500);
-            const positions = new Float32Array(particleCount * 3);
-            const velocities = new Float32Array(particleCount * 3);
-            const startTimes = new Float32Array(particleCount);
+            if (!particleTexture) {
+                particleTexture = createParticleTexture();
+            }
 
-            // Fart color palette
+            // 4. Generate Particles based on Type
             const colors = [
                 new THREE.Color(0x654321), // Brown
                 new THREE.Color(0x8B4513), // SaddleBrown
@@ -440,29 +462,44 @@ Inspired by the Fartcoin Launch Strategy.`
                 new THREE.Color(0xDAA520)  // Goldenrod
             ];
             const baseColor = colors[Math.floor(random() * colors.length)];
-            const particleColor = new THREE.Color().lerpColors(baseColor, new THREE.Color(0x9ACD32), random()); // YellowGreen tint
-            const initialBurstSpeed = 1.5 + random() * 2;
+            const particleColor = new THREE.Color().lerpColors(baseColor, new THREE.Color(0x9ACD32), random());
+
+            switch (fartType) {
+                case 'The Gaseous Ripple':
+                    generateRipple(random, particleColor, particleTexture);
+                    break;
+                case 'The Dense Nugget':
+                    generateNugget(random, particleColor, particleTexture);
+                    break;
+                case 'The Classic Cloud':
+                default:
+                    generateCloud(random, particleColor, particleTexture);
+                    break;
+            }
+            
+            scene.add(particles);
+
+            // 5. Start Animation Loop
+            animate();
+        }
+
+        function generateCloud(random, particleColor, texture) {
+            const particleCount = 700 + Math.floor(random() * 1000);
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+
+            const initialBurstSpeed = 1.0 + random();
 
             for (let i = 0; i < particleCount; i++) {
                 const i3 = i * 3;
-                positions[i3] = 0;
-                positions[i3 + 1] = 0;
-                positions[i3 + 2] = 0;
                 
-                // Random direction vector
                 const theta = random() * 2 * Math.PI;
                 const phi = Math.acos(2 * random() - 1);
+                const radius = Math.pow(random(), 0.7) * (1.0 + random());
                 
-                const dirX = Math.sin(phi) * Math.cos(theta);
-                const dirY = Math.sin(phi) * Math.sin(theta);
-                const dirZ = Math.cos(phi);
-
-                const speed = initialBurstSpeed * (0.5 + random() * 0.5);
-                velocities[i3] = dirX * speed;
-                velocities[i3 + 1] = dirY * speed;
-                velocities[i3 + 2] = dirZ * speed;
-
-                startTimes[i] = random() * 500; // Start within the first 500ms
+                positions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                positions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                positions[i3 + 2] = radius * Math.cos(phi);
             }
 
             const geometry = new THREE.BufferGeometry();
@@ -470,49 +507,136 @@ Inspired by the Fartcoin Launch Strategy.`
             
             const material = new THREE.PointsMaterial({
                 color: particleColor,
-                size: 0.05 + random() * 0.1,
+                size: 0.2 + random() * 0.3,
+                map: texture,
+                blending: THREE.AdditiveBlending,
                 transparent: true,
-                opacity: 0.9,
-                sizeAttenuation: true
+                opacity: 0.7,
+                sizeAttenuation: true,
+                depthWrite: false
             });
             
             particles = new THREE.Points(geometry, material);
-            scene.add(particles);
 
-            // 5. Start Animation Loop
-            const startTime = performance.now();
-
-            function animate() {
-                animationFrameId = requestAnimationFrame(animate);
-                const elapsedTime = performance.now() - startTime;
-
-                const positions = particles.geometry.attributes.position.array;
-                
-                for (let i = 0; i < particleCount; i++) {
-                    if (elapsedTime > startTimes[i]) {
-                        const i3 = i * 3;
-                        
-                        positions[i3] += velocities[i3] * 0.01;
-                        positions[i3 + 1] += velocities[i3 + 1] * 0.01;
-                        positions[i3 + 2] += velocities[i3 + 2] * 0.01;
-
-                        // Apply some forces (drag, light gravity)
-                        velocities[i3 + 1] -= 0.0008; 
-                        velocities[i3] *= 0.98;
-                        velocities[i3 + 1] *= 0.98;
-                        velocities[i3 + 2] *= 0.98;
-                    }
-                }
-                
-                particles.geometry.attributes.position.needsUpdate = true;
-                
-                // Keep rotating the cloud
+            updateFunction = () => {
                 particles.rotation.y += 0.001;
                 particles.rotation.x += 0.0002;
+            };
+        }
+
+        function generateRipple(random, particleColor, texture) {
+            const particleCount = 1500 + Math.floor(random() * 1000);
+            const positions = new Float32Array(particleCount * 3);
+            const startRadius = new Float32Array(particleCount);
+            const speed = new Float32Array(particleCount);
+
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                const angle = random() * Math.PI * 2;
+                const radius = 0.1 + random() * 0.5;
+                startRadius[i] = radius;
+                speed[i] = 1.5 + random();
                 
-                renderer.render(scene, camera);
+                positions[i3] = Math.cos(angle) * radius;
+                positions[i3+1] = Math.sin(angle) * radius;
+                positions[i3+2] = (random() - 0.5) * 0.1;
             }
-            animate();
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: particleColor,
+                size: 0.1 + random() * 0.15,
+                map: texture,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                opacity: 0.9,
+                sizeAttenuation: true,
+                depthWrite: false
+            });
+            
+            particles = new THREE.Points(geometry, material);
+            const startTime = performance.now();
+            const animationDuration = 2000 + random() * 1000;
+
+            updateFunction = () => {
+                const elapsedTime = performance.now() - startTime;
+                const life = elapsedTime / animationDuration;
+                const positions = particles.geometry.attributes.position.array;
+
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    const angle = Math.atan2(positions[i3+1], positions[i3]);
+                    const newRadius = startRadius[i] + life * speed[i];
+                    positions[i3] = Math.cos(angle) * newRadius;
+                    positions[i3+1] = Math.sin(angle) * newRadius;
+                }
+
+                particles.geometry.attributes.position.needsUpdate = true;
+                material.opacity = Math.max(0, 0.9 * (1 - life * 1.5));
+            };
+        }
+
+        function generateNugget(random, particleColor, texture) {
+            const particleCount = 300 + Math.floor(random() * 300);
+            const positions = new Float32Array(particleCount * 3);
+            const basePositions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                
+                const theta = random() * 2 * Math.PI;
+                const phi = Math.acos(2 * random() - 1);
+                const radius = Math.pow(random(), 2) * 0.5; // Power for very dense center
+                
+                basePositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                basePositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                basePositions[i3 + 2] = radius * Math.cos(phi);
+                
+                positions[i3] = basePositions[i3];
+                positions[i3 + 1] = basePositions[i3+1];
+                positions[i3 + 2] = basePositions[i3+2];
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: particleColor,
+                size: 0.15 + random() * 0.1,
+                map: texture,
+                blending: THREE.NormalBlending,
+                transparent: true,
+                opacity: 0.95,
+                sizeAttenuation: true,
+                depthWrite: true
+            });
+            
+            particles = new THREE.Points(geometry, material);
+            const startTime = performance.now();
+            const drift = new THREE.Vector3(random()-0.5, random()-0.5, random()-0.5).multiplyScalar(0.0005);
+
+            updateFunction = () => {
+                const elapsedTime = (performance.now() - startTime) * 0.005;
+                const positions = particles.geometry.attributes.position.array;
+
+                for(let i=0; i<particleCount; i++){
+                    const i3 = i*3;
+                    positions[i3] = basePositions[i3] + Math.sin(elapsedTime + i) * 0.02;
+                    positions[i3+1] = basePositions[i3+1] + Math.cos(elapsedTime + i) * 0.02;
+                }
+                particles.geometry.attributes.position.needsUpdate = true;
+                
+                particles.position.add(drift);
+                particles.rotation.y += 0.002;
+            };
+        }
+
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            updateFunction();
+            renderer.render(scene, camera);
         }
 
         // --- Initialization & URL Handling ---
