@@ -145,6 +145,22 @@
             background: rgba(0,0,0,0.5);
             animation: flicker 1.5s infinite;
         }
+
+        #share-button {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--green);
+            color: var(--black);
+            border: none;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            padding: 5px 10px;
+            cursor: pointer;
+            display: none; /* Hidden by default */
+            text-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -159,6 +175,7 @@
     <div id="fart-container">
         <div id="fart-label"></div>
         <canvas id="fart-canvas"></canvas>
+        <button id="share-button">Share Fart</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -236,7 +253,8 @@
   help          - Shows this help message.
   about         - Information about the $FGEN project.
   generate &lt;@h&gt; - Generates a fart based on a Twitter handle (e.g., generate @elonmusk).
-  clear         - Clears the terminal screen and any generated fart.`
+  clear         - Clears the terminal screen and any generated fart.
+  share         - Generates a shareable link for the last created fart.`
                     );
                     break;
                 case 'about':
@@ -258,6 +276,14 @@ Inspired by the Fartcoin Launch Strategy.`
                     outputElement.innerHTML = '';
                     hideFart();
                     break;
+                case 'share':
+                    if (lastHandle) {
+                        const url = `https://www.fartgenerator.fun/?handle=${lastHandle}`;
+                        appendOutput(`Share this link: <a href="${url}" target="_blank">${url}</a>`);
+                    } else {
+                        appendOutput('Error: You must generate a fart first before you can share it.');
+                    }
+                    break;
                 default:
                     appendOutput(`Command not found: ${command}. Type 'help' for a list of commands.`);
             }
@@ -268,7 +294,23 @@ Inspired by the Fartcoin Launch Strategy.`
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
+            document.getElementById('share-button').style.display = 'none';
             fartContainer.style.display = 'none';
+            if (renderer) {
+                // Clean up Three.js resources
+                scene.traverse(object => {
+                    if (object.geometry) object.geometry.dispose();
+                    if (object.material) {
+                         if (Array.isArray(object.material)) {
+                            object.material.forEach(material => material.dispose());
+                        } else {
+                            object.material.dispose();
+                        }
+                    }
+                });
+                renderer.dispose();
+                renderer = null;
+            }
         }
 
         // --- Seedable Random Number Generator ---
@@ -289,33 +331,106 @@ Inspired by the Fartcoin Launch Strategy.`
             };
         }
 
+        // --- Web Audio Fart Sound Synthesis ---
+        let audioCtx;
+
+        function initializeAudio() {
+            if (!audioCtx) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.warn('Web Audio API is not supported in this browser');
+                    appendOutput('Warning: Your browser does not support the Web Audio API. No farts were heard.');
+                }
+            }
+        }
+
+        function playFartSound(random) {
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            
+            // The main fart sound oscillator
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = 'sawtooth'; // Buzzy sound
+            const startPitch = 100 + random() * 50; // 100-150 Hz
+            const endPitch = 50 + random() * 30;   // 50-80 Hz
+            const duration = 0.5 + random(); // 0.5 to 1.5 seconds
+
+            oscillator.frequency.setValueAtTime(startPitch, now);
+            oscillator.frequency.exponentialRampToValueAtTime(endPitch, now + 0.1 + random() * 0.2);
+
+            // The gain node for volume envelope
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.4 + random() * 0.2, now + 0.05 + random() * 0.05); // peak volume
+            gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+            // A low-pass filter to make it sound more "muffled"
+            const biquadFilter = audioCtx.createBiquadFilter();
+            biquadFilter.type = "lowpass";
+            biquadFilter.frequency.setValueAtTime(400 + random() * 300, now); // cutoff freq
+            biquadFilter.Q.setValueAtTime(1 + random() * 5, now); // resonance
+
+            oscillator.connect(biquadFilter);
+            biquadFilter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.start(now);
+            oscillator.stop(now + duration);
+        }
+
         // --- Three.js Fart Generation ---
         let scene, camera, renderer, particles;
         let animationFrameId;
+        let lastHandle; // To store the last used handle for sharing
 
         function generateFart(handle) {
             appendOutput(`Generating fart for ${handle}...`);
             hideFart(); // Clear previous fart if any
+            lastHandle = handle;
+            document.getElementById('share-button').style.display = 'block';
             fartContainer.style.display = 'block';
             fartLabel.textContent = `${handle}'s fart`;
 
+            // 1. Create Seeded Random Generator
+            const seed = stringToSeed(handle);
+            const random = createSeededRandom(seed);
+            
+            // Play procedural sound
+            playFartSound(random);
 
-            // 1. Setup Scene
+            // 2. Fart Stats Generation
+            const potency = (random() * 7 + 3).toFixed(1);
+            const duration = (random() * 5 + 0.5).toFixed(1);
+            const scentProfiles = ['burnt toast and regret', 'old cheese and disappointment', 'damp socks', 'questionable life choices', 'a failed startup', 'pure sulfur'];
+            const scent = scentProfiles[Math.floor(random() * scentProfiles.length)];
+            const acousticRatings = ['silent but deadly', 'a gentle poot', 'a thunderous clap', 'surprisingly melodic', 'short and sharp'];
+            const acoustic = acousticRatings[Math.floor(random() * acousticRatings.length)];
+
+            appendOutput(
+`
+<div class="output-line">Fart Analysis Report for ${handle}:
+  Potency.........: ${potency} / 10.0
+  Duration........: ${duration}s
+  Scent Profile...: ${scent}
+  Acoustic Rating.: ${acoustic}</div>
+`
+            );
+
+            // 3. Setup Scene
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
             camera.position.z = 5;
-            if (renderer) renderer.dispose();
             renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
             renderer.setClearColor(0x000000, 0);
 
-            // 2. Create Seeded Random Generator
-            const seed = stringToSeed(handle);
-            const random = createSeededRandom(seed);
-            
-            // 3. Create Particles
+            // 4. Create Particles
             const particleCount = 500 + Math.floor(random() * 1500);
             const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const startTimes = new Float32Array(particleCount);
 
             // Fart color palette
             const colors = [
@@ -326,16 +441,28 @@ Inspired by the Fartcoin Launch Strategy.`
             ];
             const baseColor = colors[Math.floor(random() * colors.length)];
             const particleColor = new THREE.Color().lerpColors(baseColor, new THREE.Color(0x9ACD32), random()); // YellowGreen tint
+            const initialBurstSpeed = 1.5 + random() * 2;
 
             for (let i = 0; i < particleCount; i++) {
-                // Generate particles in a sphere for a more cloud-like shape
+                const i3 = i * 3;
+                positions[i3] = 0;
+                positions[i3 + 1] = 0;
+                positions[i3 + 2] = 0;
+                
+                // Random direction vector
                 const theta = random() * 2 * Math.PI;
                 const phi = Math.acos(2 * random() - 1);
-                const radius = Math.pow(random(), 0.5) * (1.5 + random()); // Power for denser center
                 
-                positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-                positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-                positions[i * 3 + 2] = radius * Math.cos(phi);
+                const dirX = Math.sin(phi) * Math.cos(theta);
+                const dirY = Math.sin(phi) * Math.sin(theta);
+                const dirZ = Math.cos(phi);
+
+                const speed = initialBurstSpeed * (0.5 + random() * 0.5);
+                velocities[i3] = dirX * speed;
+                velocities[i3 + 1] = dirY * speed;
+                velocities[i3 + 2] = dirZ * speed;
+
+                startTimes[i] = random() * 500; // Start within the first 500ms
             }
 
             const geometry = new THREE.BufferGeometry();
@@ -345,31 +472,91 @@ Inspired by the Fartcoin Launch Strategy.`
                 color: particleColor,
                 size: 0.05 + random() * 0.1,
                 transparent: true,
-                opacity: 0.8,
+                opacity: 0.9,
                 sizeAttenuation: true
             });
             
             particles = new THREE.Points(geometry, material);
             scene.add(particles);
 
-            // 4. Start Animation Loop
+            // 5. Start Animation Loop
+            const startTime = performance.now();
+
             function animate() {
                 animationFrameId = requestAnimationFrame(animate);
+                const elapsedTime = performance.now() - startTime;
 
-                particles.rotation.y += 0.002;
-                particles.rotation.x += 0.0005;
+                const positions = particles.geometry.attributes.position.array;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    if (elapsedTime > startTimes[i]) {
+                        const i3 = i * 3;
+                        
+                        positions[i3] += velocities[i3] * 0.01;
+                        positions[i3 + 1] += velocities[i3 + 1] * 0.01;
+                        positions[i3 + 2] += velocities[i3 + 2] * 0.01;
+
+                        // Apply some forces (drag, light gravity)
+                        velocities[i3 + 1] -= 0.0008; 
+                        velocities[i3] *= 0.98;
+                        velocities[i3 + 1] *= 0.98;
+                        velocities[i3 + 2] *= 0.98;
+                    }
+                }
+                
+                particles.geometry.attributes.position.needsUpdate = true;
+                
+                // Keep rotating the cloud
+                particles.rotation.y += 0.001;
+                particles.rotation.x += 0.0002;
                 
                 renderer.render(scene, camera);
             }
             animate();
         }
 
-        // --- Initialization ---
-        typeLine();
-        inputElement.focus();
-        document.body.addEventListener('click', () => {
+        // --- Initialization & URL Handling ---
+        function initialize() {
+            typeLine();
             inputElement.focus();
-        });
+
+            // A single user interaction can initialize the audio context
+            const initAudioOnInteraction = () => {
+                initializeAudio();
+                document.body.removeEventListener('click', initAudioOnInteraction);
+                document.body.removeEventListener('keydown', initAudioOnInteraction);
+            };
+            document.body.addEventListener('click', initAudioOnInteraction);
+            document.body.addEventListener('keydown', initAudioOnInteraction);
+
+            document.getElementById('share-button').addEventListener('click', () => {
+                if (lastHandle) {
+                    const url = `https://www.fartgenerator.fun/?handle=${lastHandle}`;
+                    navigator.clipboard.writeText(url).then(() => {
+                        appendOutput('Share link copied to clipboard!');
+                    }, () => {
+                         appendOutput(`Could not copy automatically. Here is the link: ${url}`);
+                    });
+                }
+            });
+
+            document.body.addEventListener('click', () => {
+                inputElement.focus();
+            });
+
+            // Check for URL params to auto-generate a fart
+            const params = new URLSearchParams(window.location.search);
+            const handle = params.get('handle');
+            if (handle && handle.startsWith('@')) {
+                // Delay generation to let the welcome message type out
+                setTimeout(() => {
+                    appendOutput(`> generate ${handle}`);
+                    handleCommand(`generate ${handle}`);
+                }, 2500);
+            }
+        }
+
+        initialize();
     </script>
 </body>
 </html>
