@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FART GENERATOR - $FGEN</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        /* Basic styles for the retro terminal look */
+        :root {
+            --green: #00ff41;
+            --black: #0d0d0d;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: var(--black);
+            color: var(--green);
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        /* CRT screen effects */
+        body::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+        
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .terminal {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 15px; /* For scrollbar */
+        }
+        
+        /* Custom scrollbar for terminal */
+        .terminal::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .terminal::-webkit-scrollbar-track {
+          background: #222;
+        }
+
+        .terminal::-webkit-scrollbar-thumb {
+          background: var(--green);
+          border-radius: 4px;
+        }
+        
+        .output-line {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        a {
+            color: var(--green);
+            text-decoration: underline;
+        }
+
+        .input-line {
+            display: flex;
+            align-items: center;
+        }
+
+        .prompt {
+            margin-right: 10px;
+        }
+
+        #terminal-input {
+            background-color: transparent;
+            border: none;
+            color: var(--green);
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            flex-grow: 1;
+            outline: none;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.2rem;
+            background-color: var(--green);
+            animation: blink 1s steps(2, start) infinite;
+        }
+        
+        @keyframes blink {
+            to {
+                visibility: hidden;
+            }
+        }
+
+        /* Container for Canvas and Label */
+        #fart-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80vmin;
+            height: 80vmin;
+            max-width: 500px;
+            max-height: 500px;
+            display: none; /* Hidden by default */
+            z-index: 10;
+        }
+
+        #fart-label {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--green);
+            font-size: 1.5rem;
+            text-shadow: 0 0 5px var(--green);
+            white-space: nowrap;
+        }
+
+        #fart-canvas {
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--green);
+            background: rgba(0,0,0,0.5);
+            animation: flicker 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="terminal" id="terminal-output"></div>
+    <div class="input-line">
+        <span class="prompt">></span>
+        <input type="text" id="terminal-input" autofocus>
+        <div class="cursor"></div>
+    </div>
+    
+    <div id="fart-container">
+        <div id="fart-label"></div>
+        <canvas id="fart-canvas"></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- DOM Elements ---
+        const outputElement = document.getElementById('terminal-output');
+        const inputElement = document.getElementById('terminal-input');
+        const fartContainer = document.getElementById('fart-container');
+        const fartLabel = document.getElementById('fart-label');
+        const canvas = document.getElementById('fart-canvas');
+
+        // --- Terminal Logic ---
+        const welcomeMessage = [
+            'FGEN BIOS v1.0.0',
+            'Copyright (C) 2025 Fartcorp Industries.',
+            '',
+            'Initializing Fart Generation Environment...',
+            'Memory Test: 69,420K OK',
+            'Ticker: $FGEN',
+            'Status: OPERATIONAL',
+            '',
+            'Welcome to the FART GENERATOR.',
+            'Type `help` for a list of commands.',
+            ''
+        ];
+
+        let lineIndex = 0;
+        let charIndex = 0;
+
+        function typeLine() {
+            if (lineIndex < welcomeMessage.length) {
+                const line = welcomeMessage[lineIndex];
+                if (charIndex < line.length) {
+                    outputElement.innerHTML += line.charAt(charIndex);
+                    charIndex++;
+                    setTimeout(typeLine, 20);
+                } else {
+                    outputElement.innerHTML += '\n';
+                    lineIndex++;
+                    charIndex = 0;
+                    setTimeout(typeLine, 20);
+                }
+                 outputElement.scrollTop = outputElement.scrollHeight;
+            }
+        }
+        
+        function appendOutput(text) {
+             const line = document.createElement('div');
+             line.className = 'output-line';
+             line.innerHTML = text; // Use innerHTML to allow for formatting
+             outputElement.appendChild(line);
+             outputElement.scrollTop = outputElement.scrollHeight;
+        }
+
+        inputElement.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                const command = inputElement.value;
+                appendOutput(`> ${command}`);
+                handleCommand(command);
+                inputElement.value = '';
+            }
+        });
+        
+        // --- Command Handling ---
+        function handleCommand(command) {
+            const parts = command.toLowerCase().split(' ');
+            const cmd = parts[0];
+            const arg = parts[1];
+
+            switch (cmd) {
+                case 'help':
+                    appendOutput(
+`Available commands:
+  help          - Shows this help message.
+  about         - Information about the $FGEN project.
+  generate &lt;@h&gt; - Generates a fart based on a Twitter handle (e.g., generate @elonmusk).
+  clear         - Clears the terminal screen and any generated fart.`
+                    );
+                    break;
+                case 'about':
+                    appendOutput(
+`$FGEN is a generative art project exploring the ephemeral and gaseous nature of value in the digital age. 
+Each unique fart, seeded by a social handle, represents a momentary burst of creative energy.
+This is not an investment. This is art. And farts.
+Inspired by the Fartcoin Launch Strategy.`
+                    );
+                    break;
+                case 'generate':
+                    if (arg && arg.startsWith('@')) {
+                        generateFart(arg);
+                    } else {
+                        appendOutput('Error: Please provide a valid Twitter handle starting with @.');
+                    }
+                    break;
+                case 'clear':
+                    outputElement.innerHTML = '';
+                    hideFart();
+                    break;
+                default:
+                    appendOutput(`Command not found: ${command}. Type 'help' for a list of commands.`);
+            }
+        }
+        
+        function hideFart() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            fartContainer.style.display = 'none';
+        }
+
+        // --- Seedable Random Number Generator ---
+        function stringToSeed(str) {
+            let seed = 0;
+            for (let i = 0; i < str.length; i++) {
+                seed = (seed << 5) - seed + str.charCodeAt(i);
+                seed |= 0; // Convert to 32bit integer
+            }
+            return seed;
+        }
+
+        function createSeededRandom(seed) {
+            let state = seed;
+            return function() {
+                state = (state * 9301 + 49297) % 233280;
+                return state / 233280;
+            };
+        }
+
+        // --- Three.js Fart Generation ---
+        let scene, camera, renderer, particles;
+        let animationFrameId;
+
+        function generateFart(handle) {
+            appendOutput(`Generating fart for ${handle}...`);
+            hideFart(); // Clear previous fart if any
+            fartContainer.style.display = 'block';
+            fartLabel.textContent = `${handle}'s fart`;
+
+
+            // 1. Setup Scene
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+            camera.position.z = 5;
+            if (renderer) renderer.dispose();
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.setClearColor(0x000000, 0);
+
+            // 2. Create Seeded Random Generator
+            const seed = stringToSeed(handle);
+            const random = createSeededRandom(seed);
+            
+            // 3. Create Particles
+            const particleCount = 500 + Math.floor(random() * 1500);
+            const positions = new Float32Array(particleCount * 3);
+
+            // Fart color palette
+            const colors = [
+                new THREE.Color(0x654321), // Brown
+                new THREE.Color(0x8B4513), // SaddleBrown
+                new THREE.Color(0x556B2F), // DarkOliveGreen
+                new THREE.Color(0xDAA520)  // Goldenrod
+            ];
+            const baseColor = colors[Math.floor(random() * colors.length)];
+            const particleColor = new THREE.Color().lerpColors(baseColor, new THREE.Color(0x9ACD32), random()); // YellowGreen tint
+
+            for (let i = 0; i < particleCount; i++) {
+                // Generate particles in a sphere for a more cloud-like shape
+                const theta = random() * 2 * Math.PI;
+                const phi = Math.acos(2 * random() - 1);
+                const radius = Math.pow(random(), 0.5) * (1.5 + random()); // Power for denser center
+                
+                positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = radius * Math.cos(phi);
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: particleColor,
+                size: 0.05 + random() * 0.1,
+                transparent: true,
+                opacity: 0.8,
+                sizeAttenuation: true
+            });
+            
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+
+            // 4. Start Animation Loop
+            function animate() {
+                animationFrameId = requestAnimationFrame(animate);
+
+                particles.rotation.y += 0.002;
+                particles.rotation.x += 0.0005;
+                
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        // --- Initialization ---
+        typeLine();
+        inputElement.focus();
+        document.body.addEventListener('click', () => {
+            inputElement.focus();
+        });
+    </script>
+</body>
+</html>
