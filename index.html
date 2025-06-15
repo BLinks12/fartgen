@@ -161,9 +161,26 @@
             display: none; /* Hidden by default */
             text-shadow: none;
         }
+
+        #x-button {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            font-size: 2rem;
+            color: var(--green);
+            text-decoration: none;
+            text-shadow: 0 0 5px var(--green);
+            z-index: 20;
+        }
+
+        #x-button:hover {
+            color: #ffffff;
+            text-shadow: 0 0 8px #ffffff;
+        }
     </style>
 </head>
 <body>
+    <a href="https://x.com/Bufondegala/status/1934284823561998706" target="_blank" id="x-button">X</a>
 
     <div class="terminal" id="terminal-output"></div>
     <div class="input-line">
